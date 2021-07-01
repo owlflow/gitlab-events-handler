@@ -1,0 +1,101 @@
+service: owlflow-gitlab
+
+frameworkVersion: ">=2.0.0 <3.0.0"
+
+plugins:
+  - serverless-bundle
+
+custom:
+  defaultStage: dev
+  currentStage: ${opt:stage, self:custom.defaultStage}
+  resourcesPrefix: ${self:service}-${self:custom.currentStage}
+  config: ${file(./config.${self:custom.currentStage}.json)}
+  deploymentBucket: ${self:custom.config.DEPLOYMENT_BUCKET}
+  bundle:
+    sourcemaps: false
+    linting: false
+    packager: yarn
+    forceExclude:
+      - aws-sdk
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+  stage: ${self:custom.currentStage}
+  region: ${self:custom.config.REGION}
+  timeout: 30
+  logRetentionInDays: 14
+  endpointType: regional
+  apiGateway:
+    restApiId: !ImportValue owlflow-hooks-${self:provider.stage}-ApiGatewayRestApi
+    restApiRootResourceId: !ImportValue owlflow-hooks-${self:provider.stage}-RootResourceId
+  eventBridge:
+    useCloudFormation: true
+  deploymentBucket:
+    name: ${self:custom.deploymentBucket}-${self:provider.region}
+  environment:
+    SERVERLESS_REGION: ${self:custom.config.REGION}
+    LOG_LEVEL: ${self:custom.config.LOG_LEVEL}
+    DEBUG: ${self:custom.config.DEBUG}
+    OWLHUB_EVENT_BUS_NAME: ${self:custom.config.OWLHUB_EVENT_BUS_NAME}
+    GET_FLOW_CONTEXT_FUNCTION: ${self:custom.config.GET_FLOW_CONTEXT_FUNCTION}
+    GET_FLOW_NODE_CONTEXT_FUNCTION: ${self:custom.config.GET_FLOW_NODE_CONTEXT_FUNCTION}
+  iamRoleStatements:
+    - Effect: "Allow"
+      Action:
+        - events:PutEvents
+      Resource: "*"
+    - Effect: "Allow"
+      Action:
+        - lambda:InvokeFunction
+      Resource:
+        - arn:aws:lambda:${self:custom.config.REGION}:*:${self:custom.config.GET_FLOW_CONTEXT_FUNCTION}
+        - arn:aws:lambda:${self:custom.config.REGION}:*:${self:custom.config.GET_FLOW_NODE_CONTEXT_FUNCTION}
+
+package:
+  excludeDevDependencies: true
+  individually: false
+  exclude:
+    - .eslintrc.js
+    - .gitattributes
+    - .gitignore
+    - .git/**
+    - .npmrc
+    - .babelrc
+    - README.md
+    - serverless.yml
+
+functions:
+  gitlabWebhookHandler:
+    handler: handler.gitlabWebhookHandler
+    name: ${self:custom.resourcesPrefix}-gitlabWebhookHandler
+    layers:
+      - ${self:custom.config.COMMON_LIB_LAYER_ARN}
+    events:
+      - http:
+          path: /gitlab/{organizationId}/{webhookId}
+          method: post
+          request:
+            parameters:
+              paths:
+                organizationId: true
+                webhookId: true
+
+  GitlabV4Handler:
+    handler: handler.gitlabV4Handler
+    name: ${self:custom.resourcesPrefix}-gitlabV4Handler
+    layers:
+      - ${self:custom.config.COMMON_LIB_LAYER_ARN}
+    events:
+      - eventBridge:
+          eventBus: ${self:custom.config.OWLHUB_EVENT_BUS_ARN}
+          pattern:
+            source:
+              - owlhub.owlflow
+            detail:
+              event:
+                - owlflow.hooks
+              eventSource:
+                - hooks.owlflow.io
+              consumerAPI:
+                - GitlabV4
