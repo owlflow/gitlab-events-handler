@@ -7,7 +7,9 @@ plugins:
 
 custom:
   defaultStage: dev
+  defaultRegion: us-east-1
   currentStage: ${opt:stage, self:custom.defaultStage}
+  currentRegion: ${opt:region, self:custom.defaultRegion}
   resourcesPrefix: ${self:service}-${self:custom.currentStage}
   config: ${file(./config.${self:custom.currentStage}.json)}
   deploymentBucket: ${self:custom.config.DEPLOYMENT_BUCKET}
@@ -22,7 +24,7 @@ provider:
   name: aws
   runtime: nodejs12.x
   stage: ${self:custom.currentStage}
-  region: ${self:custom.config.REGION}
+  region: ${self:custom.currentRegion}
   timeout: 30
   logRetentionInDays: 14
   endpointType: regional

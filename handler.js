@@ -2,9 +2,11 @@
 'use strict'
 import * as request from 'request-promise'
 
-import EventPublisher from './src/lib/EventPublisher'
-import FlowContext from './src/lib/FlowContext'
-import FlowNodeContext from './src/lib/FlowNodeContext'
+import {
+  EventPublisher,
+  FlowContext,
+  FlowNodeContext
+} from '@owlflow/common'
 
 function flattenObject (obj, res, prefix = '') {
   if (obj instanceof Array) {
@@ -22,7 +24,7 @@ function flattenObject (obj, res, prefix = '') {
   } else if (obj === null) {
     res[prefix] = null
   } else {
-    console.log('flattenObject else condtion', typeof obj, obj, prefix)
+    console.log('flattenObject else condition', typeof obj, obj, prefix)
   }
 
   return res
