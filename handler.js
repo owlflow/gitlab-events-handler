@@ -5,51 +5,9 @@ import * as request from 'request-promise'
 import {
   EventPublisher,
   FlowContext,
-  FlowNodeContext
+  FlowNodeContext,
+  Utils
 } from '@owlflow/common'
-
-function flattenObject (obj, res, prefix = '') {
-  if (obj instanceof Array) {
-    obj.forEach(function (item, i) {
-      flattenObject(item, res, prefix + '__' + i)
-    })
-  } else if (obj instanceof Object) {
-    for (const property in obj) {
-      if (Object.prototype.hasOwnProperty.call(obj, property)) {
-        flattenObject(obj[property], res, prefix + '_' + property)
-      }
-    }
-  } else if (['string', 'boolean', 'number'].includes(typeof obj)) {
-    res[prefix] = obj
-  } else if (obj === null) {
-    res[prefix] = null
-  } else {
-    console.log('flattenObject else condition', typeof obj, obj, prefix)
-  }
-
-  return res
-}
-
-const asyncForEach = async (array, cb) => {
-  for (let index = 0; index < array.length; index++) {
-    await cb(array[index], index, array)
-  }
-}
-
-const generateBitBucketToken = async (clientId, clientSecert) => {
-  return await request({
-    method: 'post',
-    uri: 'https://bitbucket.org/site/oauth2/access_token',
-    auth: {
-      user: clientId,
-      pass: clientSecert
-    },
-    form: {
-      'grant_type': 'client_credentials'
-    },
-    json: true
-  })
-}
 
 // The event handler endpoints
 exports.gitlabV4Handler = async (event, context, callback) => {
@@ -62,23 +20,24 @@ exports.gitlabV4Handler = async (event, context, callback) => {
       throw new Error('OWLFlow root or node is inactive')
     }
 
-    await asyncForEach((nodeData.actions || []), async (action) => {
+    await Utils.asyncForEach((nodeData.actions || []), async (action) => {
       switch (action) {
-        case 'declinePullRequest':
+        case 'closeMergeRequest':
           try {
-            let uri
+            const access_token = nodeData.meta.privateToken
+            let uri = 'https://gitlab.com/api/v4'
 
-            if (event.detail.flattenData[nodeData.meta[action].declineRef || '']) {
-              uri = event.detail.flattenData[nodeData.meta[action].declineRef || ''] || ''
-            } else {
-              const prId = event.detail.flattenData[nodeData.meta[action].prId]
-              uri = `https://api.bitbucket.org/2.0/repositories/${nodeData.meta.workspace}/${nodeData.meta.repoSlug}/pullrequests/${prId}/decline`
+            if (nodeData.meta.baseUrl) {
+              uri = nodeData.meta.baseUrl
             }
 
-            const { access_token } = await generateBitBucketToken(nodeData.meta.clientId, nodeData.meta.clientSecret)
+            const projectId = event.detail.flattenData[nodeData.meta[action].projectId]
+            const mergeRequestId = event.detail.flattenData[nodeData.meta[action].mergeRequestId]
+
+            uri = `${uri}/projects/${projectId}/merge_requests/${mergeRequestId}`
 
             await request({
-              method: 'POST',
+              method: 'PUT',
               uri,
               qs: {
                 access_token,
@@ -86,7 +45,6 @@ exports.gitlabV4Handler = async (event, context, callback) => {
               body: nodeData.meta[action].body,
               json: true
             })
-
           } catch (e) {
             console.log(e.error)
           }
@@ -141,11 +99,12 @@ exports.gitlabWebhookHandler = async (event, context, callback) => {
     const postData = JSON.parse(event.body)
 
     const res = {}
-    flattenObject(postData, res, nodeData.id)
+
+    Utils.flattenObject(postData, res, nodeData.id)
 
     res[`${nodeData.id}_gitlab_event`] = event.headers['X-Gitlab-Event']
 
-    await asyncForEach(nodeData.childrenIds, async (childrenId) => {
+    await Utils.asyncForEach(nodeData.childrenIds, async (childrenId) => {
       const childrenNode = await FlowNodeContext.byNodeId(flowData.id, childrenId) // nodes[childrenId]
 
       console.log(await EventPublisher.execute({
