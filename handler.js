@@ -22,7 +22,7 @@ exports.gitlabV4Handler = async (event, context, callback) => {
 
     await Utils.asyncForEach((nodeData.actions || []), async (action) => {
       switch (action) {
-        case 'closeMergeRequest':
+        case 'updateMergeRequest':
           try {
             const access_token = nodeData.meta.privateToken
             let uri = 'https://gitlab.com/api/v4'
