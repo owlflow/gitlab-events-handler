@@ -72,7 +72,7 @@ functions:
     handler: handler.gitlabWebhookHandler
     name: ${self:custom.resourcesPrefix}-gitlabWebhookHandler
     layers:
-      - ${self:custom.config.COMMON_LIB_LAYER_ARN}
+      - !ImportValue sls-owlflow-hooks-${self:provider.stage}-CommonLibsLambdaLayerQualifiedArn
     events:
       - http:
           path: /gitlab/{organizationId}/{webhookId}
@@ -87,7 +87,7 @@ functions:
     handler: handler.gitlabV4Handler
     name: ${self:custom.resourcesPrefix}-gitlabV4Handler
     layers:
-      - ${self:custom.config.COMMON_LIB_LAYER_ARN}
+      - !ImportValue sls-owlflow-hooks-${self:provider.stage}-CommonLibsLambdaLayerQualifiedArn
     events:
       - eventBridge:
           eventBus: ${self:custom.config.OWLHUB_EVENT_BUS_ARN}
